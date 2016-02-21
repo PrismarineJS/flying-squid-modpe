@@ -1,0 +1,27 @@
+{
+  "name": "flying-squid-modpe",
+  "version": "1.0.0",
+  "description": "Flying squid modpe api",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PrismarineJS/flying-squid-modpe.git"
+  },
+  "keywords": [
+    "flying",
+    "squid",
+    "modpe"
+  ],
+  "author": "Romain Beaumont <romain.rom1@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/PrismarineJS/flying-squid-modpe/issues"
+  },
+  "homepage": "https://github.com/PrismarineJS/flying-squid-modpe#readme",
+  "dependencies": {
+    "prismarine-world-sync": "^0.1.0"
+  }
+}
