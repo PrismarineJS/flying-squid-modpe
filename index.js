@@ -1,239 +1,114 @@
-const Vec3 = require("vec3").Vec3;
-const dir = require("node-dir");
-const fs = require("fs");
-const WorldSync = require("prismarine-world-sync");
+const Vec3 = require("vec3").Vec3
+const { readdir, readFile, realpath } = require("fs").promises
 
 function requireFromString(src, filename) {
-  let Module = module.constructor;
-  let m = new Module();
-  m._compile(src, filename);
-  return m.exports;
+	const Module = module.constructor
+	const m = new Module()
+	m._compile(src, filename)
+	return m.exports
 }
 
 function modpeApi() {
-  let Vec3 = null;
-  let vec3 = null;
-
-  let server = null;
-  let player = null;
-
-  module.exports.startDestroyBlock = startDestroyBlock;
-  module.exports.destroyBlock = destroyBlock;
-  module.exports.newLevel = newLevel;
-  module.exports.procCmd = procCmd;
-  module.exports.exec = exec;
-  module.exports.modTick = modTick;
-  module.exports.useItem = useItem;
-  module.exports.initSquid = initSquid;
-  function modTick(){}
-  function newLevel(){}
-
-  function useItem(x,y,z,itemId,blockId){}
-  function startDestroyBlock(x,y,z,side){}
-  function destroyBlock(x,y,z,side){}
-  function procCmd(command){}
-  function exec(code){eval(code)}
-
-  function initSquid(pl1, srv, v3) {
-    player = pl1;
-    server = srv;
-    vec3=v3;
-    Vec3=v3;
-  }
-
-  function clientMessage(message) {
-    player.chat(message);
-  }
-
-  function setTile(x, y, z, id, damage) {
-    server.setBlock(server.overworld,new Vec3(x, y, z), id, damage);
-  }
-
-  function getTile(x, y, z) {
-    return server._worldSync.getBlockType(new Vec3(x, y, z));
-  }
-
-  function preventDefault() {
-  }
-
-  function getPlayerX() {
-    return player.position.x/32;
-  }
-
-  function getPlayerY() {
-    return player.position.y/32;
-  }
-
-  function getPlayerZ() {
-    return player.position.z/32;
-  }
-
-  function getPlayerEnt() {
-    return null;
-  }
-
-  function getCarriedItem() {
-    return player.heldItem.blockId;
-  }
-
-  let Player = {
-    getCarriedItem: function () {
-      return player.heldItem.blockId;
-    }
-  };
-  let Entity = {
-    getPitch: function () {
-      return 1;
-    }
-    , getYaw: function () {
-      return 1;
-    }
-  };
-  let Level = {
-    getGameMode: function () {
-      return player.gameMode;
-    }
-    , getData: function (x, y, z) {
-      return 0;
-    }
-  };
+	let Vec3 = null
+	let vec3 = null
+	let server = null
+	let player = null
+	module.exports.startDestroyBlock = function startDestroyBlock(x, y, z, side) {}
+	module.exports.destroyBlock = function destroyBlock(x, y, z, side) {}
+	module.exports.newLevel = function newLevel() {}
+	module.exports.procCmd = function procCmd(command) {}
+	module.exports.exec = function exec(code) { eval(code) }
+	module.exports.modTick = function modTick() {}
+	module.exports.useItem = function useItem(x, y, z, itemId, blockId) {}
+	module.exports.initSquid = function initSquid(pl1, srv, v3) {
+		player = pl1;
+		server = srv;
+		vec3 = v3;
+		Vec3 = v3;
+	}
+	function clientMessage(message) { player.chat(message) }
+	function setTile(x, y, z, id, damage) {
+		server.setBlock(server.overworld, new Vec3(x, y, z), id, damage)
+	}
+	function getTile(x, y, z) { return server.overworld.sync.getBlockType(new Vec3(x, y, z)) }
+	function preventDefault() {}
+	function getPlayerX() { return player.position.x / 32 }
+	function getPlayerY() { return player.position.y / 32 }
+	function getPlayerZ() { return player.position.z / 32 }
+	function getPlayerEnt() { return null }
+	function getCarriedItem() { return player.heldItem.blockId }
+	let Player = { getCarriedItem: () => player.heldItem.blockId }
+	let Entity = { getPitch: () => 1, getYaw: () => 1 }
+	let Level = { getGameMode: () => player.gameMode, getData: (x, y, z) => 0 }
 }
 
 function convert(code) {
-  let api = modpeApi.toString()
-    .split("\n");
-  api[0] = "";
-  api[api.length - 1] = "";
-  let finapi = api.join("\n");
-  code = finapi + code;
-  return code;
+	return modpeApi.toString().slice("function modpeApi() {".length, -1) + code
 }
 
-module.exports.server=function(serv,settings)
-{
-  let verboseMPE=false;
-  function log(msg){
-    if(verboseMPE) serv.log("[MPE]:  "+msg);
-  }
-  if(!settings.modpe){
-    log("Modpe support is not enabled, disabling injecting...");
-    return;
-  }
+module.exports.server = async function(srv, { modpe, verbose }) {
+	function srvLog (msg) {
+		if (verbose) srv.log(`[MPE]: ${msg}`)
+	}
+	if (!modpe) {
+		srvLog("Modpe support is not enabled, disabling injecting...")
+		return
+	}
+	let world = serv.overworld
+	
+	srvLog("Modpe injection start...")
+	const modPePluginsDir = await realpath(`${__dirname}/../../../modpePlugins`)
+	srvLog(`Place your scripts in: ${modPePluginsDir}`)
+	
+	const mods = []
+	const files = await readdir(modPePluginsDir, { withFileTypes: true })
+	for (const file of files.filter(v => (/.js$/).test(v))) {
+		const content = convert(await readFile(file, "utf-8"))
+		const modname = file.split("/")[file.split("/").length - 1].split(".")[0]
+		srvLog(`Loading mod "${modname}" (converted)`)
+		try {
+			mods.push(requireFromString(content))
+		} catch (e) {
+			srvLog(`Error loading mod: ${e}`)
+		}
+	}
+	srvLog(`Loaded ${mods.length} mods`)
 
-  serv._worldSync=new WorldSync(serv.overworld);
-  log("Modpe injection start...");
-  let modPePluginsDir = __dirname+"/../../../modpePlugins";
-  log("Place your scripts in " + modPePluginsDir);
-  let modCount = 0;
-  let mods = [];
-  dir.readFiles(modPePluginsDir, {
-      match: /.js/
-      , exclude: /^\./
-    }, function (err, content, fname, next) {
-      if (err) throw err;
-      log("Converting " + fname);
-      content = convert(content);
-      let modname = fname.split("/")[fname.split("/")
-        .length - 1].split(".")[0];
-      log("Loading mod " + modname);
-      mods.push(requireFromString(content));
-      modCount++;
-      next();
-    }
-    , function (err, files) {
-      if(err) return;
-      log('Loaded ' + modCount + " mods");
-    });
+	serv.on("newPlayer", function injectPlayer(player) {
+		srvLog("Injected into player")
+		mods.forEach(mod => mod.initSquid(player, serv, Vec3))
+		mods.forEach(mod => mod.newLevel())
 
-  serv.on("newPlayer", function (player) {
-    injectPlayer(player,serv);
-  });
+		player._client.on("block_dig", packet => {
+			const { x, y, z } = packet.location
+			const side = 0
+			if (packet.status === 0 && player.gameMode !== 1) {
+				mods.forEach(mod => mod.startDestroyBlock(x, y, z, side))
+			} else if (packet.status === 2 && (packet.status === 0 && player.gameMode === 1)) {
+				mods.forEach(mod => mod.destroyBlock(x, y, z, side))
+			}
+			/* (packet.status == 1) -> Unused in ModPE */
+		})
 
-  function injectPlayer(player,serv) {
-    log("Injected into player");
+		player._client.on("position", () => mods.forEach(mod => mod.modTick()))
 
-    initSquid(player, serv, Vec3);
-    newLevel();
+		player._client.on("block_place", async (packet) => {
+			const { x, y, z } = packet.location
+			if (y < 0) return
+			const itemId = packet.heldItem.blockId
+			const blockId = await world.getBlockType(packet.location)
+			for (const mod of mods) {
+				mod.useItem(x, y, z, itemId, blockId)
+				mod.exec(`lastUsedItem=${itemId}`)
+			}
+		})
 
-    player._client.on("block_dig", function (packet) {
-      let pos = new Vec3(packet.location.x,packet.location.y,packet.location.z);
-      if (packet.status == 0 && player.gameMode != 1)
-        startDestroyBlock(pos.x, pos.y, pos.z, 0);
-      else if (packet.status == 2)
-        destroyBlock(pos.x, pos.y, pos.z, 0);
-      else if (packet.status == 1)
-      {/*Unused in ModPE*/}
-      else if (packet.status == 0 && player.gameMode == 1)
-        destroyBlock(pos.x, pos.y, pos.z, 0);
-    });
-
-    player._client.on('position', function (packet) {
-      modTick();
-    });
-
-    player._client.on("block_place", function (packet) {
-      if (packet.location.y < 0) return;
-      useItem(packet.location.x, packet.location.y, packet.location.z,
-        packet.heldItem.blockId,
-        serv._worldSync.getBlockType(new Vec3(packet.location.x, packet.location.y, packet.location.z)));
-    });
-
-    player.on('modpe', function (command) {
-      try {
-        procCmd(command);
-      }
-      catch(err) {
-        serv.emit("error",err);
-      }
-    });
-
-    function newLevel() {
-      mods.forEach(function (element, index, array) {
-        element.newLevel();
-      });
-    }
-
-    function useItem(x, y, z, itemId, blockId) {
-      mods.forEach(function (element, index, array) {
-        element.useItem(x, y, z, itemId, blockId);
-        element.exec("lastUsedItem=" + itemId);
-      });
-    }
-
-    function modTick() {
-      mods.forEach(function (element, index, array) {
-        element.modTick();
-      });
-    }
-
-    function exec(code) {
-      mods.forEach(function (element, index, array) {
-        element.exec(code);
-      });
-    }
-
-    function procCmd(command) {
-      mods.forEach(function (element, index, array) {
-        element.procCmd(command);
-      });
-    }
-
-    function startDestroyBlock(x, y, z, side) {
-      mods.forEach(function (element, index, array) {
-        element.startDestroyBlock(x, y, z, side);
-      });
-    }
-
-    function destroyBlock(x, y, z, side) {
-      mods.forEach(function (element, index, array) {
-        element.destroyBlock(x, y, z, side);
-      });
-    }
-
-    function initSquid(pl, sr, v3) {
-      mods.forEach(function (element, index, array) {
-        element.initSquid(pl, sr, v3);
-      });
-    }
-  }
+		player.on("modpe", cmd => {
+			try {
+				mods.forEach(mod => mod.procCmd(cmd))
+			} catch (err) {
+				srv.emit("error", err)
+			}
+		})
+	})
 };
